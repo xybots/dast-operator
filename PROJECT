@@ -1,0 +1,7 @@
+domain: banzaicloud.io
+repo: github.com/banzaicloud/dast-operator
+resources:
+- group: security
+  kind: Dast
+  version: v1alpha1
+version: "2"

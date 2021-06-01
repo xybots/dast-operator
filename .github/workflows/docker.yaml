@@ -1,0 +1,89 @@
+name: Docker
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  PLATFORMS: linux/amd64,linux/arm64
+jobs:
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Determine tag or commit
+        uses: haya14busa/action-cond@v1
+        id: refortag
+        with:
+          cond: ${{ startsWith(github.ref, 'refs/tags/') }}
+          if_true: ${{ github.ref }}
+          if_false: latest
+      - name: Determine image tag
+        id: imagetag
+        run: echo "::set-output name=value::${TAG_OR_BRANCH##*/}"
+        env:
+          TAG_OR_BRANCH: ${{ steps.refortag.outputs.value }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+        if: ${{ github.event_name == 'push' }}
+
+      - name: Build dast-operator
+        uses: docker/build-push-action@v2
+        with:
+          tags: ghcr.io/banzaicloud/dast-operator:${{ steps.imagetag.outputs.value }}
+          file: Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.event_name == 'push' }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+          labels: |
+            org.opencontainers.image.title=${{ github.event.repository.name }}
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.created=${{ steps.tags.outputs.build_date }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
+            org.opencontainers.image.vendor=Banzai Cloud
+      - name: Build dast-analyzer
+        uses: docker/build-push-action@v2
+        with:
+          tags: ghcr.io/banzaicloud/dast-analyzer:${{ steps.imagetag.outputs.value }}
+          file: Dockerfile-analyzer
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.event_name == 'push' }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+          labels: |
+            org.opencontainers.image.title=dast-analyzer
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.created=${{ steps.tags.outputs.build_date }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
+            org.opencontainers.image.vendor=Banzai Cloud

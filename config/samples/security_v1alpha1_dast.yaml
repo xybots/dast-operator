@@ -1,0 +1,8 @@
+apiVersion: security.banzaicloud.io/v1alpha1
+kind: Dast
+metadata:
+  name: dast-sample
+spec:
+  zaproxy:
+    name: dast-test
+    apikey: abcd1234
